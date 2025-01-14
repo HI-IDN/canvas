@@ -169,3 +169,13 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Sensitive files (should not be in version control).
+# These files might contain sensitive information such as passwords, app keys, etc.
+.env
+
+# Misc.
+.DS_Store
+Desktop.ini
+.vscode/
+.idea/
