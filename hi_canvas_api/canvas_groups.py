@@ -138,7 +138,7 @@ def process_groups(file_path, course_id, group_category_name):
                 print(f"Created group: {group_name} (ID: {group_id})")
 
             # Step 5: Assign the student to the group
-            assign_student_to_group(groups[group_name], canvas_id)
+            #assign_student_to_group(groups[group_name], canvas_id)
             print(f"Assigned {student_name} (Canvas ID: {canvas_id}) to {group_name}")
 
 if __name__ == "__main__":
