@@ -129,7 +129,7 @@ def process_groups(file_path, course_id, group_category_name):
         for row in reader:
             canvas_id, group_number, student_name = row
             group_number = int(group_number)
-            group_name = f"Teymi-{group_number}"
+            group_name = f"Test-{group_number}"
 
             # Step 4: Create the group if it doesn't exist
             if group_name not in groups:
@@ -144,5 +144,5 @@ def process_groups(file_path, course_id, group_category_name):
 if __name__ == "__main__":
     # File path to the groups.csv
     CSV_FILE = "groups.csv"
-    GROUP_CATEGORY_NAME = "Teymi" # þetta eru hópasett.
+    GROUP_CATEGORY_NAME = "Test" # þetta eru hópasett.
     process_groups(CSV_FILE, COURSE_ID, GROUP_CATEGORY_NAME)
