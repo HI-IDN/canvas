@@ -123,18 +123,20 @@ def validate_group(group_id):
     print(f"DEBUG: Group details: {response.json()}")
 
 def assign_student_to_group(group_id, canvas_id):
-    """Assign a student to a specific group with additional debugging."""
-    # Validate group
-    validate_group(group_id)
-    
+    """Assign a student to a specific group."""
+    # Ensure canvas_id is clean
+    canvas_id = canvas_id.strip()
+    if not canvas_id.isdigit():
+        raise ValueError(f"Invalid Canvas ID: {canvas_id}")
+
     url = f"{BASE_URL}/groups/{group_id}/memberships"
-    payload = {"user_id": canvas_id}
+    payload = {"user_id": int(canvas_id)}
     print(f"DEBUG: Making POST request to {url} with payload {payload}")
-    headers = get_headers()
+
     response = requests.post(url, headers=headers, json=payload)
     print(f"DEBUG: Response Status Code: {response.status_code}")
     print(f"DEBUG: Response Text: {response.text}")
-    
+
     if response.status_code == 404:
         raise Exception(f"Group {group_id} or endpoint not found. Response: {response.text}")
     elif response.status_code == 409:
@@ -154,10 +156,12 @@ def process_groups(file_path, course_id, group_category_name):
 
     # Step 3: Read CSV and process groups and students
     groups = existing_groups  # Use fetched groups as the starting point
-    with open(file_path, mode="r", encoding="utf-8") as file:
+    
+    with open(file_path, mode="r", encoding="utf-8-sig") as file:
         reader = csv.reader(file, delimiter=";")
         for row in reader:
             canvas_id, group_number, student_name = row
+            canvas_id = canvas_id.strip()  # Ensure no extra spaces
             group_number = int(group_number)
             group_name = f"Test-{group_number}"
 
