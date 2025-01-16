@@ -144,5 +144,5 @@ def process_groups(file_path, course_id, group_category_name):
 if __name__ == "__main__":
     # File path to the groups.csv
     CSV_FILE = "groups.csv"
-    GROUP_CATEGORY_NAME = "Hópar"
+    GROUP_CATEGORY_NAME = "Teymi" # þetta eru hópasett.
     process_groups(CSV_FILE, COURSE_ID, GROUP_CATEGORY_NAME)
