@@ -102,7 +102,7 @@ def create_group(group_category_id, group_name):
     response.raise_for_status()
     return response.json()["id"]
 
-def assign_student_to_group(group_id, canvas_id):
+def assign_student_to_group_(group_id, canvas_id):
     """Assign a student to a specific group."""
     url = f"{BASE_URL}/groups/{group_id}/memberships"
     payload = {"user_id": canvas_id}
@@ -112,6 +112,36 @@ def assign_student_to_group(group_id, canvas_id):
         print(f"User {canvas_id} is already in the group.")
     else:
         response.raise_for_status()
+
+def validate_group(group_id):
+    url = f"{BASE_URL}/groups/{group_id}"
+    headers = get_headers()
+    response = requests.get(url, headers=headers)
+    if response.status_code == 404:
+        raise Exception(f"Group {group_id} not found.")
+    response.raise_for_status()
+    print(f"DEBUG: Group details: {response.json()}")
+
+def assign_student_to_group(group_id, canvas_id):
+    """Assign a student to a specific group with additional debugging."""
+    # Validate group
+    validate_group(group_id)
+    
+    url = f"{BASE_URL}/groups/{group_id}/memberships"
+    payload = {"user_id": canvas_id}
+    print(f"DEBUG: Making POST request to {url} with payload {payload}")
+    headers = get_headers()
+    response = requests.post(url, headers=headers, json=payload)
+    print(f"DEBUG: Response Status Code: {response.status_code}")
+    print(f"DEBUG: Response Text: {response.text}")
+    
+    if response.status_code == 404:
+        raise Exception(f"Group {group_id} or endpoint not found. Response: {response.text}")
+    elif response.status_code == 409:
+        print(f"User {canvas_id} is already in the group.")
+    else:
+        response.raise_for_status()
+        print(f"Assigned user {canvas_id} to group {group_id}")
 
 def process_groups(file_path, course_id, group_category_name):
     # Step 1: Fetch or create the group category
