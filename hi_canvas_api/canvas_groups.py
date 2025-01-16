@@ -133,7 +133,7 @@ def assign_student_to_group(group_id, canvas_id):
     payload = {"user_id": int(canvas_id)}
     print(f"DEBUG: Making POST request to {url} with payload {payload}")
 
-    response = requests.post(url, headers=headers, json=payload)
+    response = requests.post(url, headers=get_headers(), json=payload)
     print(f"DEBUG: Response Status Code: {response.status_code}")
     print(f"DEBUG: Response Text: {response.text}")
 
