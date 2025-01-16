@@ -50,7 +50,7 @@ def validate_env_vars() -> None:
 validate_env_vars()
 
 # Construct the base URL dynamically
-BASE_URL = f"{INSTITUTION_URL}/api/{API_VERSION}/calendar_events"
+BASE_URL = f"{INSTITUTION_URL}/api/{API_VERSION}"
 
 def get_headers() -> dict[str, str]:
     """Returns the headers for API requests."""
