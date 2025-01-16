@@ -1,0 +1,28 @@
+{
+  "125555": {
+    "name": "Heimaverkefni",
+    "assignments": [
+      {
+        "id": 150122,
+        "name": "HÁMA - Python",
+        "description": "<p>Í fyrsta tímanum (17/1) söfnuðum við gögnum í HÁMU sem við ætlum að nota til að velja viðeigandi stika fyrir hermunina okkar. Við erum að fylgja BSU dæminu úr kennslubók (dæmi 2.30, bls 172-174 í Law 5e). Gögnin má finna undir námsefni, eining: HÁMA.</p><p>Við gerum ráð fyrir að millikomutímar fylgi veldisdreifingu (e. exponential distribution), með stikanum sem þið reiknið út frá meðaltali millikomutíma gagnanna.</p><p>Einnig þurfum við að lesa út frá gögnunum hverjar eru líkurnar á að kúnni fari í heitan mat, samloku eða strax að sækja sér drykk.</p><p>Í tímanum 24/1 var forritaður grunnur að hermilíkani í Python. Þið eigið að halda áfram með það og svara eftirfarandi spurningum:</p><ul><li>Hvert er meðal- og hámarksbiðtími í biðröð fyrir heitan mat, samlokur og kassana (óháð því hvaða kassi)?</li><li>Hver er meðal- og hámarksfjöldi í biðröð fyrir heitan mat og samlokur (hvert fyrir sig), og meðal- og hámarksfjöldi í öllum röðum við kassana?</li><li>Hver er meðal- og hámarks<strong>heildar</strong>biðtíma í öllum röðum fyrir hverja af þremur tegundum viðskiptavina (sér fyrir sig)?</li><li>Hver er heildarmeðaltalsbiðtími allra viðskiptavina, ef við reiknum vægi hvers heildarmeðalbiðtíma út frá hlutfalli viðskiptavina af hverri tegund?</li><li>Hvað fóru margir kúnnar í gegnum kerfið og hver var heildarmeðaltími þeirra í HÁMU?</li></ul><h3>Skil:</h3><p>Skrifið uppfærðan Python kóða sem <code>.py</code> skrá og takið saman stutta skýrslu sem útskýrir niðurstöðurnar ykkar.</p><script src=\"https://instructure-uploads-eu.s3.eu-west-1.amazonaws.com/account_153020000000000001/attachments/243515/import_script.js\"></script>",
+        "due_at": "2025-01-28T23:59:59Z",
+        "points": 0.0,
+        "published": false,
+        "allowed_extensions": [
+          "pdf",
+          "md",
+          "py"
+        ]
+      }
+    ]
+  },
+  "134195": {
+    "name": "Lokaverkefni",
+    "assignments": []
+  },
+  "134196": {
+    "name": "Lokapróf",
+    "assignments": []
+  }
+}
