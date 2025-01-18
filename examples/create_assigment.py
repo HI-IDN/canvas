@@ -2,6 +2,7 @@ import sys
 import os
 import json
 import argparse
+import logging
 
 # Ensure the root directory is in the Python path
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -9,7 +10,6 @@ root_dir = os.path.abspath(os.path.join(current_dir, ".."))
 sys.path.insert(0, root_dir)
 
 from hi_canvas_api.canvas_assignment import add_assignment, get_assignment_groups
-import logging
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -30,6 +30,8 @@ def main():
     parser.add_argument("--input_json", type=str, required=True,
                         default="assignment.json",
                         help="Path to the JSON file containing assignment details (default: %(default)s)")
+    parser.add_argument("--description_file", type=str, required=False,
+                        help="Path to the HTML file containing the assignment description")
 
     args = parser.parse_args()
 
@@ -38,11 +40,18 @@ def main():
         with open(args.input_json, "r", encoding="utf-8") as f:
             assignment_data = json.load(f)
 
-        # Validue_at required fields in JSON
+        # Validate required fields in JSON
         required_fields = ["group_name", "name", "due_at"]
         for field in required_fields:
             if field not in assignment_data:
                 raise ValueError(f"Missing required field in JSON: {field}")
+
+        # If a description file is provided, read the content
+        if args.description_file:
+            with open(args.description_file, "r", encoding="utf-8") as html_file:
+                description_content = html_file.read()
+                # Replace the description in the JSON data with the HTML content
+                assignment_data["description"] = description_content
 
         # Retrieve assignment groups
         groups = get_assignment_groups()
