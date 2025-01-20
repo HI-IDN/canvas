@@ -51,13 +51,26 @@ def main():
         if not group_id:
             raise ValueError(f"Assignment group '{assignment_data['group_name']}' not found.")
 
+        description_file = assignment_data.get("description_file")
+        # Read the html file and assign it to the description key
+        if description_file:
+            # Check if the file exists
+            if not os.path.exists(description_file):
+                raise FileNotFoundError(f"Description file not found: {description_file}")
+            with open(description_file, "r", encoding="utf-8") as f:
+                description = f.read()
+        else:
+            description = assignment_data.get("description", "")
+
         # Prepare assignment payload
         payload = {
             "id": assignment_data.get("id", None),
             "name": assignment_data["name"],
-            "description": assignment_data.get("description", ""),
+            "description": description,
             "due_at": assignment_data["due_at"],
-            "points": assignment_data.get("points", 0.0),
+            "points_possible": assignment_data.get("points_possible", 0),
+            "grading_type": assignment_data.get("grading_type", "points"),
+            "submission_types": assignment_data.get("submission_types", ["online_upload"]),
             "published": assignment_data.get("published", False),
             "allowed_extensions": assignment_data.get("allowed_extensions", []),
         }
