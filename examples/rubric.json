@@ -1,0 +1,130 @@
+{
+  "title": "Rubrik fyrir verkefni 2",
+  "criteria": [
+    {
+      "description": "Sauðakóði fyrir Simplex-aðferðina",
+      "ratings": {
+        "1": {
+          "description": "Ófullnægjandi",
+          "long_description": "Sauðakóðinn er óskýrt skrifaður, vantar lykilskref eða er óformlegur að því marki að ekki er hægt að fylgja honum til útfærslu.",
+          "points": 1
+        },
+        "2": {
+          "description": "Sæmilegt",
+          "long_description": "Sauðakóðinn útskýrir aðferðina en skrefin eru ekki alltaf skýr eða rökrétt sett fram. Sum mikilvæg atriði gætu vantað eða verið óljós.",
+          "points": 4
+        },
+        "3": {
+          "description": "Gott",
+          "long_description": "Sauðakóðinn er vel skrifaður og skrefin eru að mestu skýr. Það gæti þó verið lítilvæg óskýrleiki eða vöntun á formlegri framsetningu.",
+          "points": 7
+        },
+        "4": {
+          "description": "Framúrskarandi",
+          "long_description": "Sauðakóðinn er mjög skýr, formlega réttur og lýsir skrefum Simplex-aðferðarinnar á skipulegan hátt. Skilgreinir inntak (c, A, b) og úttak (x, T) nákvæmlega og tengir þau rétt við reikniskref.",
+          "points": 10
+        }
+      }
+    },
+    {
+      "description": "Útskýring á hlutverki c, A og b í Simplex-aðferðinni",
+      "ratings": {
+        "1": {
+          "description": "Ófullnægjandi",
+          "long_description": "Ekki skýr útskýring eða rangar upplýsingar um hlutverk c, A og b.",
+          "points": 1
+        },
+        "2": {
+          "description": "Sæmilegt",
+          "long_description": "Sumt er rétt en ekki skýrt eða vantar lykilupplýsingar um hlutverk c, A og b.",
+          "points": 4
+        },
+        "3": {
+          "description": "Gott",
+          "long_description": "Hlutverk c, A og b er skýrt útskýrt, en gæti verið betur tengt við Simplex-aðferðina.",
+          "points": 7
+        },
+        "4": {
+          "description": "Framúrskarandi",
+          "long_description": "Nákvæm og skýr útskýring á hlutverki c, A og b í Simplex-aðferðinni, með tengingu við stærðfræðilega formgerð reikniritisins.",
+          "points": 10
+        }
+      }
+    },
+    {
+      "description": "Skilgreining á úttaki Simplex-aðferðarinnar",
+      "ratings": {
+        "1": {
+          "description": "Ófullnægjandi",
+          "long_description": "Skilgreining á úttaki (x, T) er óskýr eða röng.",
+          "points": 1
+        },
+        "2": {
+          "description": "Sæmilegt",
+          "long_description": "Úttak Simplex-aðferðarinnar er skilgreint en gæti verið ófullnægjandi eða óskýrt.",
+          "points": 4
+        },
+        "3": {
+          "description": "Gott",
+          "long_description": "Úttak Simplex-aðferðarinnar er rétt skilgreint en vantar smávægilega skýrleika eða frekari útfærslu.",
+          "points": 7
+        },
+        "4": {
+          "description": "Framúrskarandi",
+          "long_description": "Úttak (x, T) er nákvæmlega skilgreint, með skýringu á hvernig Simplex-aðferðin skilar þessum gildum.",
+          "points": 10
+        }
+      }
+    },
+    {
+      "description": "Lýsandi dæmi um Simplex-aðferðina",
+      "ratings": {
+        "1": {
+          "description": "Ófullnægjandi",
+          "long_description": "Engin dæmi eða dæmið er óskiljanlegt og gagnslaust til útskýringar.",
+          "points": 1
+        },
+        "2": {
+          "description": "Sæmilegt",
+          "long_description": "Dæmi er til staðar en skortir nákvæmni eða er óskýrt sett fram.",
+          "points": 4
+        },
+        "3": {
+          "description": "Gott",
+          "long_description": "Dæmi er vel sett fram og gagnlegt, en gæti verið nákvæmara eða betur útskýrt.",
+          "points": 7
+        },
+        "4": {
+          "description": "Framúrskarandi",
+          "long_description": "Dæmi er skýrt, nákvæmt og útskýrir Simplex-aðferðina á einfaldan og skiljanlegan hátt.",
+          "points": 10
+        }
+      }
+    },
+    {
+      "description": "Notkun stærðfræðilegrar táknunar",
+      "ratings": {
+        "1": {
+          "description": "Ófullnægjandi",
+          "long_description": "Ónákvæm eða röng stærðfræðileg táknun sem veldur misskilningi.",
+          "points": 1
+        },
+        "2": {
+          "description": "Sæmilegt",
+          "long_description": "Notuð stærðfræðileg táknun er að mestu rétt en gæti verið ruglingsleg eða vantar skýrleika.",
+          "points": 4
+        },
+        "3": {
+          "description": "Gott",
+          "long_description": "Notkun stærðfræðilegrar táknunar er rétt en mætti vera betur útfærð eða skýrari.",
+          "points": 7
+        },
+        "4": {
+          "description": "Framúrskarandi",
+          "long_description": "Stærðfræðileg táknun er nákvæm, rétt og auðvelt að fylgja, sem stuðlar að skilningi á Simplex-aðferðinni.",
+          "points": 10
+        }
+      }
+    }
+  ]
+}
