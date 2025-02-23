@@ -56,7 +56,7 @@ def get_headers() -> dict[str, str]:
     """Returns the headers for API requests."""
     return {"Authorization": f"Bearer {API_TOKEN}"}
 
-def get_all_students(course_id):
+def get_all_students():
     """
     Fetches all students in a given course, returning a list of dicts:
     [
@@ -70,7 +70,7 @@ def get_all_students(course_id):
     """
     headers = get_headers()
     students = []
-    url = f"{BASE_URL}/courses/{course_id}/users"
+    url = f"{BASE_URL}/courses/{COURSE_ID}/users"
     
     # We use a loop to handle pagination in Canvas
     params = {
@@ -115,7 +115,7 @@ def get_all_students(course_id):
 
 if __name__ == "__main__":
     # Get a list of all students
-    student_list = get_all_students(COURSE_ID)
+    student_list = get_all_students()
     
     # Print them or write them to a CSV file for easy import to Excel
     with open("students.csv", mode="w", newline="", encoding="utf-8") as csv_file:
