@@ -1,95 +1,89 @@
 import requests
 import os
 import json
-import logging
+import argparse
 from dotenv import load_dotenv
-from typing import Any
 
-# Load environment variables from the .env file
+# Load environment variables from .env file
 load_dotenv()
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-
-# Environment variables
-INSTITUTION_URL = os.getenv("INSTITUTION_URL")
-API_VERSION = os.getenv("API_VERSION")
-API_TOKEN = os.getenv("API_TOKEN")
+# API Config
 COURSE_ID = os.getenv("COURSE_ID")
+BASE_URL = os.getenv("INSTITUTION_URL")
+API_TOKEN = os.getenv("API_TOKEN")
+CREATE_URL = f"{BASE_URL}/api/v1/courses/{COURSE_ID}/rubrics"
 
 # Validate environment variables
-def validate_env_vars() -> None:
-    """Validates essential environment variables."""
-    if not API_TOKEN:
-        raise ValueError("API_TOKEN is missing. Please set it in the .env file.")
-    if not COURSE_ID:
-        raise ValueError("COURSE_ID is missing. Please set it in the .env file.")
-    if not INSTITUTION_URL:
-        raise ValueError("INSTITUTION_URL is missing. Please set it in the .env file.")
+if not COURSE_ID or not BASE_URL or not API_TOKEN:
+    raise ValueError("Missing environment variables. Please set COURSE_ID, INSTITUTION_URL, and API_TOKEN.")
 
-validate_env_vars()
+# Headers for API requests
+HEADERS = {
+    "Authorization": f"Bearer {API_TOKEN}",
+    "Content-Type": "application/json",
+}
 
-# API URL for rubrics
-RUBRICS_URL = f"{INSTITUTION_URL}/api/{API_VERSION}/courses/{COURSE_ID}/rubrics"
-
-def get_headers() -> dict[str, str]:
-    """Returns the headers for API requests."""
-    return {"Authorization": f"Bearer {API_TOKEN}", "Content-Type": "application/json"}
-
-def load_rubric_from_json(file_path: str) -> dict[str, Any]:
-    """Loads rubric data from a JSON file."""
+def load_rubric(file_path: str) -> dict:
+    """Loads rubric JSON data from file."""
     with open(file_path, "r", encoding="utf-8") as file:
         return json.load(file)
 
-def create_rubric(rubric_data: dict[str, Any]) -> None:
-    """Creates a rubric in Canvas from the given JSON data."""
-    headers = get_headers()
-
-    # Prepare the rubric payload
-    payload = {
-        "title": rubric_data["title"],
-        "criteria": [
-            {
-                "description": criterion["description"],
-                "long_description": criterion.get("long_description", ""),
-                "points": criterion["points"]
+def format_rubric_criteria(criteria_data: list) -> dict:
+    """Formats rubric criteria to match Canvas API requirements."""
+    rubric_criteria = {}
+    for idx, criterion in enumerate(criteria_data, start=1):
+        rubric_criteria[str(idx)] = {
+            "description": criterion["description"],
+            "ratings": {
+                key: {
+                    "description": value["description"],
+                    "long_description": value.get("long_description", ""),
+                    "points": value["points"]
+                }
+                for key, value in criterion["ratings"].items()  # Lyklar í stað lista
             }
-            for criterion in rubric_data["criteria"]
-        ],
-        "course_id": COURSE_ID
+        }
+    return rubric_criteria
+
+
+def create_rubric(rubric_data: dict):
+    """Creates a rubric in Canvas."""
+    rubric_title = rubric_data["title"]
+    rubric_criteria = format_rubric_criteria(rubric_data["criteria"])
+
+    payload = {
+        "rubric_association": {
+            "association_type": "Course",
+            "association_id": COURSE_ID,
+            "use_for_grading": True,
+            "title": rubric_title,
+        },
+        "rubric": {
+            "title": rubric_title,
+            "criteria": rubric_criteria,
+        },
     }
 
-    # Make the API request
-    response = requests.post(RUBRICS_URL, headers=headers, json=payload)
+    response = requests.post(CREATE_URL, headers=HEADERS, json=payload)
 
-    if response.status_code == 201:
-        logging.info(f"Rubric '{rubric_data['title']}' created successfully.")
+    if response.status_code == 200:
+        print(f"✅ Rubric '{rubric_title}' created successfully!")
     else:
-        raise Exception(
-            f"Failed to create rubric '{rubric_data['title']}': {response.status_code} - {response.text}"
-        )
+        print(f"❌ Failed to create rubric '{rubric_title}': {response.status_code}")
+        print(response.json())
 
-def rubric_to_graderubric(rubric: list) -> list:
-    """
-    Transforms the retrieved rubric into a grading rubric where the instructor can input scores and comments.
+def main():
+    """Main function to handle CLI input and upload rubric."""
+    parser = argparse.ArgumentParser(description="Upload a rubric to Canvas using a JSON file.")
+    parser.add_argument("--file", type=str, default="rubric.json", help="Path to the rubric JSON file.")
+    args = parser.parse_args()
 
-    Args:
-        rubric (list): The rubric retrieved from Canvas.
+    if not os.path.exists(args.file):
+        print(f"Error: File not found: {args.file}")
+        return
 
-    Returns:
-        list: A structured rubric ready for grading, with empty score and comment fields.
-    """
-    grading_rubric = []
-    
-    for criterion in rubric:
-        grading_rubric.append({
-            "criterion_id": criterion["id"],
-            "criterion_name": criterion["description"],
-            "max_points": criterion["points"],
-            "score": 0,  
-            "comment": ""  
-        })
+    rubric_data = load_rubric(args.file)
+    create_rubric(rubric_data)
 
-    return grading_rubric
-
-
+if __name__ == "__main__":
+    main()
