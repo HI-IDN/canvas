@@ -72,6 +72,30 @@ def create_rubric(rubric_data: dict):
         print(f"❌ Failed to create rubric '{rubric_title}': {response.status_code}")
         print(response.json())
 
+def rubric_to_graderubric(rubric):
+    """
+    Converts an original assignment rubric into a grading rubric template.
+
+    Args:
+        rubric (list): A list of rubric criteria from the assignment.
+
+    Returns:
+        list: A grading rubric template where scores and comments are initialized.
+    """
+    grading_rubric = []
+
+    for criterion in rubric:
+        grading_rubric.append({
+            "criterion_id": criterion["id"],
+            "criterion_name": criterion["description"],  # Criterion name
+            "max_points": criterion["points"],  # Max possible score
+            "score": 0,  # Default score before grading
+            "comment": ""  # Placeholder for comments
+        })
+
+    return grading_rubric
+
+
 def main():
     """Main function to handle CLI input and upload rubric."""
     parser = argparse.ArgumentParser(description="Upload a rubric to Canvas using a JSON file.")
