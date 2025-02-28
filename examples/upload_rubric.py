@@ -1,89 +1,47 @@
+import sys
 import requests
 import os
-import json
 import argparse
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
+# Ensure the root directory is in the Python path
+current_dir = os.path.dirname(os.path.abspath(__file__))
+root_dir = os.path.abspath(os.path.join(current_dir, ".."))
+sys.path.insert(0, root_dir)
 
-# API Config
-COURSE_ID = os.getenv("COURSE_ID")
-BASE_URL = os.getenv("INSTITUTION_URL")
-API_TOKEN = os.getenv("API_TOKEN")
-CREATE_URL = f"{BASE_URL}/api/v1/courses/{COURSE_ID}/rubrics"
+from hi_canvas_api.canvas_rubric import (load_rubric, validate_rubric, delete_rubric,
+                                         list_rubrics, create_rubric)
 
-# Validate environment variables
-if not COURSE_ID or not BASE_URL or not API_TOKEN:
-    raise ValueError("Missing environment variables. Please set COURSE_ID, INSTITUTION_URL, and API_TOKEN.")
-
-# Headers for API requests
-HEADERS = {
-    "Authorization": f"Bearer {API_TOKEN}",
-    "Content-Type": "application/json",
-}
-
-def load_rubric(file_path: str) -> dict:
-    """Loads rubric JSON data from file."""
-    with open(file_path, "r", encoding="utf-8") as file:
-        return json.load(file)
-
-def format_rubric_criteria(criteria_data: list) -> dict:
-    """Formats rubric criteria to match Canvas API requirements."""
-    rubric_criteria = {}
-    for idx, criterion in enumerate(criteria_data, start=1):
-        rubric_criteria[str(idx)] = {
-            "description": criterion["description"],
-            "ratings": {
-                key: {
-                    "description": value["description"],
-                    "long_description": value.get("long_description", ""),
-                    "points": value["points"]
-                }
-                for key, value in criterion["ratings"].items()  # Lyklar í stað lista
-            }
-        }
-    return rubric_criteria
-
-
-def create_rubric(rubric_data: dict):
-    """Creates a rubric in Canvas."""
-    rubric_title = rubric_data["title"]
-    rubric_criteria = format_rubric_criteria(rubric_data["criteria"])
-
-    payload = {
-        "rubric_association": {
-            "association_type": "Course",
-            "association_id": COURSE_ID,
-            "use_for_grading": True,
-            "title": rubric_title,
-        },
-        "rubric": {
-            "title": rubric_title,
-            "criteria": rubric_criteria,
-        },
-    }
-
-    response = requests.post(CREATE_URL, headers=HEADERS, json=payload)
-
-    if response.status_code == 200:
-        print(f"✅ Rubric '{rubric_title}' created successfully!")
-    else:
-        print(f"❌ Failed to create rubric '{rubric_title}': {response.status_code}")
-        print(response.json())
 
 def main():
     """Main function to handle CLI input and upload rubric."""
-    parser = argparse.ArgumentParser(description="Upload a rubric to Canvas using a JSON file.")
-    parser.add_argument("--file", type=str, default="rubric.json", help="Path to the rubric JSON file.")
+    parser = argparse.ArgumentParser(description="Manage Canvas rubrics via API.")
+    parser.add_argument("--file", type=str, default="rubric.json",
+                        help="Path to the rubric JSON file.")
+    parser.add_argument("--list", action="store_true", help="List all rubrics.")
+    parser.add_argument("--delete", type=str, help="Delete rubric by ID.")
+
     args = parser.parse_args()
+
+    if args.list:
+        list_rubrics()
+        return
+
+    if args.delete:
+        delete_rubric(args.delete)
+        return
 
     if not os.path.exists(args.file):
         print(f"Error: File not found: {args.file}")
         return
 
     rubric_data = load_rubric(args.file)
+    valid, errors = validate_rubric(rubric_data)
+    if not valid:
+        print("\n".join(errors))
+        return
     create_rubric(rubric_data)
+
 
 if __name__ == "__main__":
     main()

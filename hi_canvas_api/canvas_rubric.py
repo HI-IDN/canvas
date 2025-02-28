@@ -1,7 +1,6 @@
 import requests
 import os
 import json
-import argparse
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -12,6 +11,7 @@ COURSE_ID = os.getenv("COURSE_ID")
 BASE_URL = os.getenv("INSTITUTION_URL")
 API_TOKEN = os.getenv("API_TOKEN")
 CREATE_URL = f"{BASE_URL}/api/v1/courses/{COURSE_ID}/rubrics"
+LIST_URL = f"{BASE_URL}/api/v1/courses/{COURSE_ID}/rubrics"
 
 # Validate environment variables
 if not COURSE_ID or not BASE_URL or not API_TOKEN:
@@ -165,20 +165,30 @@ def rubric_to_graderubric(rubric):
     return grading_rubric
 
 
-def main():
-    """Main function to handle CLI input and upload rubric."""
-    parser = argparse.ArgumentParser(description="Upload a rubric to Canvas using a JSON file.")
-    parser.add_argument("--file", type=str, default="rubric.json",
-                        help="Path to the rubric JSON file.")
-    args = parser.parse_args()
+def list_rubrics():
+    """Lists all rubrics in the course."""
+    response = requests.get(LIST_URL, headers=HEADERS)
 
-    if not os.path.exists(args.file):
-        print(f"Error: File not found: {args.file}")
-        return
+    if response.status_code == 200:
+        rubrics = response.json()
+        if rubrics:
+            print("📌 Available Rubrics:")
+            for rubric in rubrics:
+                print(f"- {rubric['title']} (ID: {rubric['id']})")
+        else:
+            print("ℹ️ No rubrics found.")
+    else:
+        print(f"❌ Failed to retrieve rubrics: {response.status_code}")
+        print(response.json())
 
-    rubric_data = load_rubric(args.file)
-    create_rubric(rubric_data)
 
+def delete_rubric(rubric_id: str):
+    """Deletes a rubric by ID."""
+    delete_url = f"{BASE_URL}/api/v1/courses/{COURSE_ID}/rubrics/{rubric_id}"
+    response = requests.delete(delete_url, headers=HEADERS)
 
-if __name__ == "__main__":
-    main()
+    if response.status_code == 200:
+        print(f"✅ Rubric ID {rubric_id} deleted successfully.")
+    else:
+        print(f"❌ Failed to delete rubric {rubric_id}: {response.status_code}")
+        print(response.json())
