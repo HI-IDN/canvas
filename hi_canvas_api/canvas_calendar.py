@@ -101,6 +101,8 @@ def delete_all_calendar_events() -> None:
         if event.get("workflow_state") == "deleted":
             logging.warning(f"Skipping event {event['id']} as it is already deleted.")
             continue
+        # Delete the event
+        print(f"Deleting event {event['id']}...")
         delete_calendar_event(event["id"])
 
 

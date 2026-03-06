@@ -1,13 +1,16 @@
 import requests
 import os
 import logging
+import mimetypes
 from dotenv import load_dotenv
 from typing import Optional, Any
+import base64
 import json
 import re
-from traitlets.config import Config
 import nbformat
-from nbconvert import MarkdownExporter
+import traceback
+from datetime import datetime, timezone
+from nbconvert import MarkdownExporter, PDFExporter
 from nbconvert.filters import strip_ansi
 from nbconvert.preprocessors import Preprocessor
 
@@ -82,6 +85,48 @@ def get_submissions(assignment_id: int) -> list:
     return submissions
 
 
+def get_submissions_with_options(
+    assignment_id: int,
+    include: Optional[list[str]] = None,
+    grouped: bool = False,
+) -> list:
+    """Retrieve submissions with optional include/grouped parameters."""
+    headers = get_headers()
+    submissions_url = f"{INSTITUTION_URL}/api/{API_VERSION}/courses/{COURSE_ID}/assignments/{assignment_id}/submissions"
+    params = {}
+    if include:
+        params["include[]"] = include
+    if grouped:
+        params["grouped"] = "true"
+
+    submissions = []
+    first_request = True
+    while submissions_url:
+        if first_request:
+            response = requests.get(submissions_url, headers=headers, params=params)
+            first_request = False
+        else:
+            response = requests.get(submissions_url, headers=headers)
+        if response.status_code != 200:
+            raise Exception(
+                f"Failed to retrieve submissions for assignment {assignment_id}: "
+                f"{response.status_code} - {response.text}"
+            )
+
+        data = response.json()
+        submissions.extend(data)
+
+        submissions_url = None
+        if "Link" in response.headers:
+            links = response.headers["Link"].split(",")
+            for link in links:
+                if 'rel="next"' in link:
+                    submissions_url = link[link.find("<") + 1 : link.find(">")]
+                    break
+
+    return submissions
+
+
 def download_attachment(file_url: str, save_path: str) -> None:
     """Download a file from the given URL and save it to the specified path."""
     headers = get_headers()
@@ -143,6 +188,57 @@ class RemoveHTMLPreprocessor(Preprocessor):
         
         return cell, resources
 
+
+class StripImageOutputsPreprocessor(Preprocessor):
+    """Remove image outputs so Markdown stays text-focused."""
+
+    IMAGE_MIME_TYPES = {
+        "image/png",
+        "image/jpeg",
+        "image/jpg",
+        "image/gif",
+        "image/svg+xml",
+        "application/pdf",
+    }
+
+    def preprocess_cell(self, cell, resources, index):
+        if "outputs" not in cell:
+            return cell, resources
+
+        cleaned_outputs = []
+        for output in cell["outputs"]:
+            data = output.get("data")
+            if not data:
+                cleaned_outputs.append(output)
+                continue
+
+            cleaned_data = {
+                mime: value for mime, value in data.items() if mime not in self.IMAGE_MIME_TYPES
+            }
+            if cleaned_data:
+                output["data"] = cleaned_data
+                cleaned_outputs.append(output)
+
+        cell["outputs"] = cleaned_outputs
+        return cell, resources
+
+
+class StripMarkdownImagesPreprocessor(Preprocessor):
+    """Remove image markup from markdown cells."""
+
+    def preprocess_cell(self, cell, resources, index):
+        if cell.get("cell_type") != "markdown" or "source" not in cell:
+            return cell, resources
+
+        source = cell["source"]
+        if isinstance(source, list):
+            text = "".join(source)
+            cell["source"] = [strip_markdown_images(text)]
+        else:
+            cell["source"] = strip_markdown_images(source)
+
+        return cell, resources
+
 def clean_markdown(md_content):
     """Removes <div>, <style>, and execution warnings from Markdown content."""
     md_content = re.sub(r"<style.*?>.*?</style>", "", md_content, flags=re.DOTALL)  # Remove <style> elements
@@ -151,7 +247,45 @@ def clean_markdown(md_content):
     md_content = strip_ansi(md_content)  # Remove terminal color codes (if any)
     return md_content
 
-def convert_ipynb_to_md(notebook_path: str, output_filename: str) -> str:
+
+def strip_markdown_images(md_content):
+    """Remove Markdown/HTML image tags to keep output text-only."""
+    image_exts = (".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".bmp", ".tiff", ".tif")
+
+    md_content = re.sub(r"<img\b[^>]*>", "", md_content, flags=re.IGNORECASE)
+    md_content = re.sub(r"!\[[^]]*\]\[[^]]*\]", "", md_content)
+
+    def strip_inline_images(match):
+        url = match.group(1).strip().lower()
+        if "data:image" in url or any(ext in url for ext in image_exts):
+            return ""
+        return match.group(0)
+
+    md_content = re.sub(
+        r"!\[[^]]*\]\(([^)]*)\)",
+        strip_inline_images,
+        md_content,
+        flags=re.DOTALL,
+    )
+
+    def strip_image_refs(match):
+        url = match.group(1).strip().lower()
+        if url.startswith("data:image"):
+            return ""
+        if url.endswith(image_exts):
+            return ""
+        return match.group(0)
+
+    md_content = re.sub(
+        r"^\s*\[[^]]+\]:\s*(\S+).*$",
+        strip_image_refs,
+        md_content,
+        flags=re.MULTILINE,
+    )
+    md_content = re.sub(r"\n{3,}", "\n\n", md_content)
+    return md_content
+
+def convert_ipynb_to_md(notebook_path: str, output_filename: str, drop_images: bool = True) -> str:
     """Convert a Jupyter notebook to a Markdown file and clean it up."""
     
     if not os.path.exists(notebook_path):
@@ -167,7 +301,10 @@ def convert_ipynb_to_md(notebook_path: str, output_filename: str) -> str:
     md_exporter = MarkdownExporter()
     
     # Register a custom preprocessor to remove HTML elements and execution warnings
-    md_exporter.register_preprocessor(RemoveHTMLPreprocessor, enabled=True)
+    #md_exporter.register_preprocessor(RemoveHTMLPreprocessor, enabled=True)
+    if drop_images:
+        md_exporter.register_preprocessor(StripImageOutputsPreprocessor, enabled=True)
+        md_exporter.register_preprocessor(StripMarkdownImagesPreprocessor, enabled=True)
 
     md_exporter.exclude_output = False  # Ensure outputs are included
     md_exporter.exclude_output_prompt = False  # Include output prompts
@@ -177,7 +314,9 @@ def convert_ipynb_to_md(notebook_path: str, output_filename: str) -> str:
     markdown_output, _ = md_exporter.from_notebook_node(notebook_content)
 
     # Further clean the output with regex (for remaining <div> and <style>)
-    markdown_output = clean_markdown(markdown_output)
+    #markdown_output = clean_markdown(markdown_output)
+    if drop_images:
+        markdown_output = strip_markdown_images(markdown_output)
 
     md_path = os.path.join(output_folder, output_filename)
 
@@ -186,6 +325,170 @@ def convert_ipynb_to_md(notebook_path: str, output_filename: str) -> str:
 
     print(f"Notebook converted to Markdown: {md_path}")
     return md_path
+
+
+def convert_ipynb_to_pdf(notebook_path: str, output_filename: str) -> str:
+    """Convert a Jupyter notebook to a PDF file."""
+    if not os.path.exists(notebook_path):
+        raise FileNotFoundError(f"Notebook file not found: {notebook_path}")
+
+    output_folder = os.path.dirname(notebook_path)
+    os.makedirs(output_folder, exist_ok=True)
+
+    with open(notebook_path, "r", encoding="utf-8") as f:
+        notebook_content = nbformat.read(f, as_version=4)
+
+    notebook_content = _rewrite_markdown_data_images(notebook_content, output_folder, notebook_path)
+
+    pdf_exporter = PDFExporter()
+    pdf_exporter.exclude_output = False
+    pdf_exporter.exclude_output_prompt = False
+    pdf_exporter.exclude_input_prompt = False
+    resources = {"metadata": {"path": output_folder}}
+    pdf_output, _ = pdf_exporter.from_notebook_node(notebook_content, resources=resources)
+
+    pdf_path = os.path.join(output_folder, output_filename)
+    with open(pdf_path, "wb") as f:
+        f.write(pdf_output)
+
+    print(f"Notebook converted to PDF: {pdf_path}")
+    return pdf_path
+
+
+def _write_pdf_export_error(log_path: str, notebook_path: str, error: Exception) -> None:
+    """Write a PDF export error log for later debugging."""
+    with open(log_path, "w", encoding="utf-8") as f:
+        f.write(f"Notebook: {notebook_path}\n")
+        f.write(f"Error: {error}\n\n")
+        f.write(traceback.format_exc())
+
+
+def parse_canvas_time(timestamp: Optional[str]) -> Optional[datetime]:
+    if not timestamp:
+        return None
+    ts = timestamp.strip()
+    if ts.endswith("Z"):
+        ts = ts[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(ts)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def sanitize_folder_name(value: str) -> str:
+    cleaned = re.sub(r"[\\\\/:*?\"<>|]+", "_", value.strip())
+    return re.sub(r"\s+", " ", cleaned).strip()
+
+
+def get_group_category_groups(group_category_id: int) -> dict:
+    """Return a mapping of group_id -> group_name for a group category."""
+    headers = get_headers()
+    url = f"{INSTITUTION_URL}/api/{API_VERSION}/group_categories/{group_category_id}/groups"
+    groups = []
+    while url:
+        response = requests.get(url, headers=headers)
+        if response.status_code != 200:
+            raise Exception(
+                f"Failed to retrieve groups for category {group_category_id}: "
+                f"{response.status_code} - {response.text}"
+            )
+        data = response.json()
+        groups.extend(data)
+
+        url = None
+        if "Link" in response.headers:
+            links = response.headers["Link"].split(",")
+            for link in links:
+                if 'rel="next"' in link:
+                    url = link[link.find("<") + 1 : link.find(">")]
+                    break
+
+    return {group["id"]: group["name"] for group in groups if "id" in group}
+
+
+def get_group_members(group_id: int) -> list:
+    """Return a list of group members (id, name)."""
+    headers = get_headers()
+    url = f"{INSTITUTION_URL}/api/{API_VERSION}/groups/{group_id}/users"
+    members = []
+    while url:
+        response = requests.get(url, headers=headers)
+        if response.status_code != 200:
+            raise Exception(
+                f"Failed to retrieve members for group {group_id}: "
+                f"{response.status_code} - {response.text}"
+            )
+        data = response.json()
+        members.extend(data)
+
+        url = None
+        if "Link" in response.headers:
+            links = response.headers["Link"].split(",")
+            for link in links:
+                if 'rel="next"' in link:
+                    url = link[link.find("<") + 1 : link.find(">")]
+                    break
+
+    return [{"id": m.get("id"), "name": m.get("name")} for m in members]
+
+
+def _rewrite_markdown_data_images(notebook_content, output_folder: str, notebook_path: str):
+    """Extract data:image URIs in markdown cells into files and rewrite links."""
+    image_ext_map = {
+        "png": "png",
+        "jpeg": "jpg",
+        "jpg": "jpg",
+        "gif": "gif",
+        "svg+xml": "svg",
+        "webp": "webp",
+        "bmp": "bmp",
+        "tiff": "tiff",
+        "tif": "tif",
+    }
+    pattern = re.compile(r"!\[[^]]*\]\((data:image/[^)]*)\)", flags=re.DOTALL)
+    basename = os.path.splitext(os.path.basename(notebook_path))[0]
+    counter = 0
+
+    for cell in notebook_content.get("cells", []):
+        if cell.get("cell_type") != "markdown" or "source" not in cell:
+            continue
+
+        source = cell["source"]
+        text = "".join(source) if isinstance(source, list) else source
+
+        def replace_match(match):
+            nonlocal counter
+            data_uri = match.group(1)
+            if not data_uri.startswith("data:image/"):
+                return match.group(0)
+
+            header, b64_data = data_uri.split(",", 1)
+            mime_match = re.match(r"data:image/([^;]+)", header)
+            if not mime_match:
+                return match.group(0)
+
+            mime = mime_match.group(1).lower()
+            ext = image_ext_map.get(mime, "png")
+            counter += 1
+            filename = f"{basename}_img_{counter:03d}.{ext}"
+            image_path = os.path.join(output_folder, filename)
+
+            try:
+                decoded = base64.b64decode(re.sub(r"\\s+", "", b64_data))
+                with open(image_path, "wb") as f:
+                    f.write(decoded)
+            except Exception:
+                return match.group(0)
+
+            return match.group(0).replace(data_uri, filename)
+
+        text = pattern.sub(replace_match, text)
+        cell["source"] = [text] if isinstance(source, list) else text
+
+    return notebook_content
 
 
 def convert_ipynb_to_md_X(notebook_path: str, output_filename: str) -> str:
@@ -269,7 +572,12 @@ def convert_ipynb_to_md_(notebook_path: str, output_filename: str) -> str:
     print(f"Notebook converted to Markdown: {md_path}")
     return md_path
 
-def save_submissions_with_attachments(assignment_id: int, folder_path: str) -> None:
+def save_submissions_with_attachments(
+    assignment_id: int,
+    folder_path: str,
+    export_pdf: bool = False,
+    drop_images: bool = True,
+) -> None:
     """Download all attachments for submissions of an assignment and save them locally."""
     # Create the folder if it doesn't exist
     if not os.path.exists(folder_path):
@@ -278,17 +586,72 @@ def save_submissions_with_attachments(assignment_id: int, folder_path: str) -> N
 
     print("Assignment ID:", assignment_id)
 
-    submissions = get_submissions(assignment_id)
-    print(submissions)
-    for submission in submissions:
+    assignment_details = get_single_assignment(assignment_id)
+    group_category_id = assignment_details.get("group_category_id") if assignment_details else None
+    is_group_assignment = bool(group_category_id)
+
+    if is_group_assignment:
+        group_name_by_id = {
+            str(group_id): name for group_id, name in get_group_category_groups(group_category_id).items()
+        }
+        group_members_cache = {}
+        submissions = get_submissions_with_options(assignment_id, include=["user", "group"])
+
+        group_latest = {}
+        ungrouped_latest = {}
+        for submission in submissions:
+            if submission.get("workflow_state") not in {"submitted", "graded"}:
+                continue
+            group_id = submission.get("group_id") or submission.get("group", {}).get("id")
+            ts = parse_canvas_time(
+                submission.get("updated_at")
+                or submission.get("submitted_at")
+                or submission.get("graded_at")
+            )
+            if group_id:
+                group_id_str = str(group_id)
+                existing = group_latest.get(group_id_str)
+                if not existing or (ts and ts > existing[1]):
+                    group_latest[group_id_str] = (submission, ts)
+            else:
+                user_id = submission.get("user_id")
+                if not user_id:
+                    continue
+                existing = ungrouped_latest.get(user_id)
+                if not existing or (ts and ts > existing[1]):
+                    ungrouped_latest[user_id] = (submission, ts)
+
+        submissions_to_process = (
+            [entry[0] for entry in group_latest.values()]
+            + [entry[0] for entry in ungrouped_latest.values()]
+        )
+    else:
+        submissions_to_process = get_submissions_with_options(assignment_id, include=["user"])
+
+    for submission in submissions_to_process:
         # Only process submissions that have been submitted
 #        print(submission)
-        if submission.get("workflow_state") != "submitted":
+        if submission.get("workflow_state") not in {"submitted", "graded"}:
             logging.info(f"Skipping user ID {submission.get('user_id')} as they have not submitted.")
             continue
 
         user_id = submission.get("user_id")
         user_name = submission.get("user", {}).get("name", f"User_{user_id}")
+        group_id = submission.get("group_id") or submission.get("group", {}).get("id")
+        group_id_str = str(group_id) if group_id is not None else None
+        group_name = submission.get("group", {}).get("name")
+        if is_group_assignment and group_id_str and not group_name:
+            group_name = group_name_by_id.get(group_id_str)
+
+        if is_group_assignment and group_id_str:
+            target_folder = os.path.join(folder_path, f"Group_{group_id_str}")
+        elif is_group_assignment:
+            target_folder = os.path.join(folder_path, f"User_{user_id}")
+        else:
+            target_folder = os.path.join(folder_path, user_name)
+
+        if is_group_assignment and not os.path.exists(target_folder):
+            os.makedirs(target_folder)
 
         # Check for attachments
         attachments = submission.get("attachments", [])
@@ -298,20 +661,58 @@ def save_submissions_with_attachments(assignment_id: int, folder_path: str) -> N
                 file_url = attachment.get("url")
                 if file_url:
                     # Save file to the folder
-                    user_folder = os.path.join(folder_path, user_name)
-                    if not os.path.exists(user_folder):
-                        os.makedirs(user_folder)
+                    if not os.path.exists(target_folder):
+                        os.makedirs(target_folder)
 
-                    save_path = os.path.join(user_folder, file_name)
+                    save_path = os.path.join(target_folder, file_name)
                     download_attachment(file_url, save_path)
                     # After downloading each .ipynb file
                     if file_name.endswith(".ipynb"):
-                        json_output_path = os.path.join(user_folder, f"{os.path.splitext(file_name)[0]}_cells.json")
+                        json_output_path = os.path.join(
+                            target_folder,
+                            f"{os.path.splitext(file_name)[0]}_cells.json",
+                        )
                         #process_ipynb(save_path, json_output_path)
                         # Convert the notebook to Markdown
-                        convert_ipynb_to_md(save_path, "assignment.md")
+                        convert_ipynb_to_md(save_path, "assignment.md", drop_images=drop_images)
+                        if export_pdf:
+                            try:
+                                convert_ipynb_to_pdf(save_path, "assignment.pdf")
+                            except Exception as exc:
+                                logging.error("PDF export failed for %s: %s", save_path, exc)
+                                error_log_path = os.path.join(target_folder, "assignment_pdf_error.log")
+                                _write_pdf_export_error(error_log_path, save_path, exc)
         else:
             logging.info(f"No attachments found for submission by {user_name}.")
+
+        if is_group_assignment:
+            if group_id_str:
+                group_id_int = (
+                    int(group_id) if isinstance(group_id, (int, str)) and str(group_id).isdigit() else None
+                )
+                if group_id_str not in group_members_cache and group_id_int is not None:
+                    try:
+                        group_members_cache[group_id_str] = get_group_members(group_id_int)
+                    except Exception as exc:
+                        logging.error("Failed to load members for group %s: %s", group_id, exc)
+                        group_members_cache[group_id_str] = []
+
+                members_path = os.path.join(target_folder, "group_members.json")
+                with open(members_path, "w", encoding="utf-8") as f:
+                    json.dump(group_members_cache.get(group_id_str, []), f, ensure_ascii=False, indent=2)
+
+            meta = {
+                "group_id": group_id,
+                "group_name": group_name,
+                "submitted_by_user_id": user_id,
+                "submitted_by_user_name": user_name,
+                "submitted_at": submission.get("submitted_at"),
+                "updated_at": submission.get("updated_at"),
+                "workflow_state": submission.get("workflow_state"),
+            }
+            meta_path = os.path.join(target_folder, "submission_meta.json")
+            with open(meta_path, "w", encoding="utf-8") as f:
+                json.dump(meta, f, ensure_ascii=False, indent=2)
 
 
 def add_assignment(assignment, group_id: None) -> None:
@@ -546,7 +947,13 @@ def check_submission_exists(assignment_id: int, student_id: int):
         return False
 
 
-def upload_graded_rubric(student_id: int, assignment_id: int, graded_rubric_path: str) -> None:
+def upload_graded_rubric(
+    student_id: int,
+    assignment_id: int,
+    graded_rubric_path: str,
+    comment_file_ids: Optional[list[int]] = None,
+    comment_text: Optional[str] = None,
+) -> None:
     """
     Uploads the graded rubric to Canvas using query parameters and updates the final grade.
 
@@ -583,6 +990,11 @@ def upload_graded_rubric(student_id: int, assignment_id: int, graded_rubric_path
         if "comment" in criterion and criterion["comment"].strip():
             query_params[f"rubric_assessment[{criterion_id}][comments]"] = criterion["comment"]
 
+    if comment_text is not None:
+        query_params["comment[text_comment]"] = comment_text
+    if comment_file_ids:
+        query_params["comment[file_ids][]"] = comment_file_ids
+
     # ✅ Correct Canvas API endpoint
     grading_url = f"{INSTITUTION_URL}/api/{API_VERSION}/courses/{COURSE_ID}/assignments/{assignment_id}/submissions/{student_id}"
 
@@ -600,3 +1012,141 @@ def upload_graded_rubric(student_id: int, assignment_id: int, graded_rubric_path
     else:
         logging.error(f"❌ Failed to upload rubric for student {student_id}: {response.status_code} - {response.text}")
 
+
+def post_submission_comment(
+    student_id: int,
+    assignment_id: int,
+    comment_text: str,
+    group_comment: bool = False,
+    file_ids: Optional[list[int]] = None,
+):
+    """Post a comment to a student's assignment submission."""
+    if not comment_text.strip() and not file_ids:
+        logging.warning("Empty comment for student %s; skipping.", student_id)
+        return False, None, "empty comment"
+
+    submission_url = (
+        f"{INSTITUTION_URL}/api/{API_VERSION}/courses/{COURSE_ID}"
+        f"/assignments/{assignment_id}/submissions/{student_id}"
+    )
+    comment_url = (
+        f"{INSTITUTION_URL}/api/{API_VERSION}/courses/{COURSE_ID}"
+        f"/assignments/{assignment_id}/submissions/{student_id}/comments"
+    )
+    headers = get_headers()
+    payload = {"comment[text_comment]": comment_text}
+    if file_ids:
+        payload["comment[file_ids][]"] = file_ids
+    if group_comment:
+        payload["comment[group_comment]"] = "true"
+
+    response = requests.put(submission_url, headers=headers, params=payload)
+    if response.status_code in {200, 201}:
+        logging.info("Posted comment for student %s via submissions endpoint.", student_id)
+        return True, response.status_code, response.text
+
+    response = requests.post(comment_url, headers=headers, data=payload)
+    if response.status_code in {200, 201}:
+        logging.info("Posted comment for student %s via comments endpoint.", student_id)
+        return True, response.status_code, response.text
+
+    logging.error(
+        "Failed to post comment for student %s: %s - %s",
+        student_id,
+        response.status_code,
+        response.text,
+    )
+    return False, response.status_code, response.text
+
+
+def _extract_file_id(upload_info: Any) -> Optional[int]:
+    if not isinstance(upload_info, dict):
+        return None
+    if isinstance(upload_info.get("id"), int):
+        return upload_info["id"]
+    attachment = upload_info.get("attachment")
+    if isinstance(attachment, dict) and isinstance(attachment.get("id"), int):
+        return attachment["id"]
+    file_obj = upload_info.get("file")
+    if isinstance(file_obj, dict) and isinstance(file_obj.get("id"), int):
+        return file_obj["id"]
+    return None
+
+
+def upload_submission_comment_file(
+    student_id: int,
+    assignment_id: int,
+    file_path: str,
+) -> Optional[int]:
+    """Upload a file for a submission comment and return the new file ID."""
+    if not os.path.exists(file_path):
+        logging.warning("Attachment not found: %s", file_path)
+        return None
+
+    file_name = os.path.basename(file_path)
+    file_size = os.path.getsize(file_path)
+    content_type, _ = mimetypes.guess_type(file_path)
+
+    init_url = (
+        f"{INSTITUTION_URL}/api/{API_VERSION}/courses/{COURSE_ID}"
+        f"/assignments/{assignment_id}/submissions/{student_id}/comments/files"
+    )
+    payload = {"name": file_name, "size": file_size}
+    if content_type:
+        payload["content_type"] = content_type
+
+    init_response = requests.post(init_url, headers=get_headers(), data=payload)
+    if init_response.status_code not in {200, 201}:
+        logging.error(
+            "Failed to initiate attachment upload for student %s: %s - %s",
+            student_id,
+            init_response.status_code,
+            init_response.text,
+        )
+        return None
+
+    upload_data = init_response.json()
+    upload_url = upload_data.get("upload_url")
+    upload_params = upload_data.get("upload_params", {})
+    if not upload_url:
+        logging.error("Invalid upload init response: %s", upload_data)
+        return None
+
+    with open(file_path, "rb") as file:
+        upload_response = requests.post(
+            upload_url,
+            data=upload_params,
+            files={"file": (file_name, file)},
+            allow_redirects=False,
+        )
+
+    file_info = None
+    location = upload_response.headers.get("Location")
+    if upload_response.status_code in {301, 302, 303, 307, 308} and location:
+        finalize_response = requests.get(location, headers=get_headers())
+        if finalize_response.status_code in {200, 201}:
+            try:
+                file_info = finalize_response.json()
+            except ValueError:
+                file_info = None
+    else:
+        try:
+            file_info = upload_response.json()
+        except ValueError:
+            file_info = None
+
+    if (not file_info) and location:
+        finalize_response = requests.get(location, headers=get_headers())
+        if finalize_response.status_code in {200, 201}:
+            try:
+                file_info = finalize_response.json()
+            except ValueError:
+                file_info = None
+
+    file_id = _extract_file_id(file_info)
+    if not file_id:
+        logging.error("Failed to complete attachment upload for student %s.", student_id)
+        return None
+
+    logging.info("Uploaded attachment for student %s (file_id=%s).", student_id, file_id)
+    return file_id
