@@ -650,7 +650,7 @@ def save_submissions_with_attachments(
         else:
             target_folder = os.path.join(folder_path, user_name)
 
-        if is_group_assignment and not os.path.exists(target_folder):
+        if not os.path.exists(target_folder):
             os.makedirs(target_folder)
 
         # Check for attachments
@@ -685,34 +685,33 @@ def save_submissions_with_attachments(
         else:
             logging.info(f"No attachments found for submission by {user_name}.")
 
-        if is_group_assignment:
-            if group_id_str:
-                group_id_int = (
-                    int(group_id) if isinstance(group_id, (int, str)) and str(group_id).isdigit() else None
-                )
-                if group_id_str not in group_members_cache and group_id_int is not None:
-                    try:
-                        group_members_cache[group_id_str] = get_group_members(group_id_int)
-                    except Exception as exc:
-                        logging.error("Failed to load members for group %s: %s", group_id, exc)
-                        group_members_cache[group_id_str] = []
+        if is_group_assignment and group_id_str:
+            group_id_int = (
+                int(group_id) if isinstance(group_id, (int, str)) and str(group_id).isdigit() else None
+            )
+            if group_id_str not in group_members_cache and group_id_int is not None:
+                try:
+                    group_members_cache[group_id_str] = get_group_members(group_id_int)
+                except Exception as exc:
+                    logging.error("Failed to load members for group %s: %s", group_id, exc)
+                    group_members_cache[group_id_str] = []
 
-                members_path = os.path.join(target_folder, "group_members.json")
-                with open(members_path, "w", encoding="utf-8") as f:
-                    json.dump(group_members_cache.get(group_id_str, []), f, ensure_ascii=False, indent=2)
+            members_path = os.path.join(target_folder, "group_members.json")
+            with open(members_path, "w", encoding="utf-8") as f:
+                json.dump(group_members_cache.get(group_id_str, []), f, ensure_ascii=False, indent=2)
 
-            meta = {
-                "group_id": group_id,
-                "group_name": group_name,
-                "submitted_by_user_id": user_id,
-                "submitted_by_user_name": user_name,
-                "submitted_at": submission.get("submitted_at"),
-                "updated_at": submission.get("updated_at"),
-                "workflow_state": submission.get("workflow_state"),
-            }
-            meta_path = os.path.join(target_folder, "submission_meta.json")
-            with open(meta_path, "w", encoding="utf-8") as f:
-                json.dump(meta, f, ensure_ascii=False, indent=2)
+        meta = {
+            "group_id": group_id,
+            "group_name": group_name,
+            "submitted_by_user_id": user_id,
+            "submitted_by_user_name": user_name,
+            "submitted_at": submission.get("submitted_at"),
+            "updated_at": submission.get("updated_at"),
+            "workflow_state": submission.get("workflow_state"),
+        }
+        meta_path = os.path.join(target_folder, "submission_meta.json")
+        with open(meta_path, "w", encoding="utf-8") as f:
+            json.dump(meta, f, ensure_ascii=False, indent=2)
 
 
 def add_assignment(assignment, group_id: None) -> None:
@@ -781,17 +780,40 @@ def get_single_assignment(assignment_id: int) -> dict:
     return response.json()
 
 
-def get_all_assignments() -> list:
-    """Retrieve all assignments.
-    """
+def _fetch_assignment_pages(params: Optional[dict[str, Any]] = None) -> list:
+    """Fetch assignment pages with pagination support."""
     headers = get_headers()
+    url = ASSIGNMENTS_URL
+    first_request = True
+    assignments = []
 
-    response = requests.get(ASSIGNMENTS_URL, headers=headers)
-    if response.status_code != 200:
-        raise Exception(f"Failed to retrieve assignments: {response.status_code} - {response.text}")
+    while url:
+        if first_request:
+            response = requests.get(url, headers=headers, params=params or {"per_page": 100})
+            first_request = False
+        else:
+            response = requests.get(url, headers=headers)
 
-    assignments = response.json()
+        if response.status_code != 200:
+            raise Exception(f"Failed to retrieve assignments: {response.status_code} - {response.text}")
+
+        assignments.extend(response.json())
+        url = response.links.get("next", {}).get("url")
+
     return assignments
+
+
+def get_all_assignments() -> list:
+    """Retrieve all assignments, including New Quiz assignments when available."""
+    assignments = {}
+
+    for params in ({"per_page": 100}, {"per_page": 100, "new_quizzes": "true"}):
+        for assignment in _fetch_assignment_pages(params=params):
+            assignment_id = assignment.get("id")
+            if assignment_id is not None:
+                assignments[assignment_id] = assignment
+
+    return list(assignments.values())
 
 
 def get_assignment_groups() -> dict:
@@ -922,7 +944,8 @@ def get_assignment_rubric(assignment_id: int) -> list:
         logging.error(f"Failed to retrieve rubric for assignment {assignment_id}: {response.status_code} - {response.text}")
         return []
 
-    rubric_data = response.json()['rubric']
+    payload = response.json()
+    rubric_data = payload.get("rubric") or []
     return rubric_data
 
 def check_submission_exists(assignment_id: int, student_id: int):
