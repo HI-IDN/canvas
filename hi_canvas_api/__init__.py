@@ -9,6 +9,7 @@ from .canvas_quizzes import (
     add_quiz_question,
     create_quiz_with_questions,
     list_quizzes,
+    set_quiz_published,
     delete_quiz,
 )
 

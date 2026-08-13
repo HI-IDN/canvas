@@ -125,7 +125,9 @@ def create_quiz(quiz_data: dict) -> Optional[int]:
     )
 
 
-def add_quiz_question(quiz_id: int, question: dict) -> Optional[int]:
+def add_quiz_question(
+    quiz_id: int, question: dict, quiz_group_id: Optional[int] = None
+) -> Optional[int]:
     """
     Add a single multiple-choice question to an existing quiz.
 
@@ -135,6 +137,9 @@ def add_quiz_question(quiz_id: int, question: dict) -> Optional[int]:
             (required), optional ``question_name``, ``points_possible``
             (default 1) and ``answers`` — a list of ``{"text": str,
             "correct": bool}`` dicts with exactly one correct answer.
+        quiz_group_id (int, optional): If given, the question is placed inside
+            this quiz question group (used for randomly drawn question banks).
+            The question's ``quiz_group_id`` key overrides this argument.
 
     Returns:
         int | None: The new question ID, or None on failure.
@@ -147,15 +152,19 @@ def add_quiz_question(quiz_id: int, question: dict) -> Optional[int]:
         for answer in question["answers"]
     ]
 
-    question_payload = {
-        "question": {
-            "question_name": question.get("question_name", ""),
-            "question_text": question["question_text"],
-            "question_type": "multiple_choice_question",
-            "points_possible": question.get("points_possible", 1),
-            "answers": answers_payload,
-        }
+    question_body = {
+        "question_name": question.get("question_name", ""),
+        "question_text": question["question_text"],
+        "question_type": "multiple_choice_question",
+        "points_possible": question.get("points_possible", 1),
+        "answers": answers_payload,
     }
+
+    group_id = question.get("quiz_group_id", quiz_group_id)
+    if group_id is not None:
+        question_body["quiz_group_id"] = group_id
+
+    question_payload = {"question": question_body}
 
     url = f"{QUIZZES_URL}/{quiz_id}/questions"
     response = requests.post(url, headers=get_headers(), json=question_payload)
@@ -222,6 +231,27 @@ def list_quizzes() -> list:
     else:
         logging.info("ℹ️ No quizzes found.")
     return quizzes
+
+
+def set_quiz_published(quiz_id: int, published: bool) -> None:
+    """
+    Publish or unpublish an existing quiz.
+
+    Args:
+        quiz_id (int): The quiz to update.
+        published (bool): True to publish, False to move it back to draft.
+    """
+    url = f"{QUIZZES_URL}/{quiz_id}"
+    response = requests.put(url, headers=get_headers(), json={"quiz": {"published": published}})
+
+    if response.status_code in (200, 201):
+        state = "published" if published else "unpublished"
+        logging.info(f"Quiz ID {quiz_id} {state}.")
+    else:
+        raise Exception(
+            f"Failed to update quiz {quiz_id} publish state: "
+            f"{response.status_code} - {response.text}"
+        )
 
 
 def delete_quiz(quiz_id: int) -> None:
