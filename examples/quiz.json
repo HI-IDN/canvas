@@ -1,0 +1,44 @@
+{
+  "title": "Sample Quiz",
+  "description": "<p>A short multiple-choice sample quiz created via the Canvas API.</p>",
+  "quiz_type": "assignment",
+  "time_limit": 10,
+  "shuffle_answers": true,
+  "allowed_attempts": 1,
+  "published": false,
+  "questions": [
+    {
+      "question_name": "Question 1",
+      "question_text": "<p>What is 2 + 2?</p>",
+      "points_possible": 1,
+      "answers": [
+        {"text": "4", "correct": true},
+        {"text": "3", "correct": false},
+        {"text": "5", "correct": false},
+        {"text": "22", "correct": false}
+      ]
+    },
+    {
+      "question_name": "Question 2",
+      "question_text": "<p>Which planet is known as the Red Planet?</p>",
+      "points_possible": 1,
+      "answers": [
+        {"text": "Mars", "correct": true},
+        {"text": "Venus", "correct": false},
+        {"text": "Jupiter", "correct": false},
+        {"text": "Saturn", "correct": false}
+      ]
+    },
+    {
+      "question_name": "Question 3",
+      "question_text": "<p>What color do you get by mixing blue and yellow?</p>",
+      "points_possible": 1,
+      "answers": [
+        {"text": "Green", "correct": true},
+        {"text": "Purple", "correct": false},
+        {"text": "Orange", "correct": false},
+        {"text": "Brown", "correct": false}
+      ]
+    }
+  ]
+}
