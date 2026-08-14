@@ -5,19 +5,26 @@ This repository provides tools for importing, exporting, and managing data for C
 ## Folder Structure
 
 ```plaintext
-hi_canvas_api/
+canvas/
 │
 ├── hi_canvas_api/
 │   ├── __init__.py             # Makes the directory a Python package
 │   ├── canvas_calendar.py      # Handles calendar-specific functionality
-│   ├── canvas_rubrics.py       # (Future) Handles rubrics-related functionality
+│   ├── canvas_assignment.py    # Handles assignments and submissions
+│   ├── canvas_groups.py        # Handles student groups
+│   ├── canvas_rubric.py        # Handles rubrics
+│   ├── canvas_students.py      # Handles students
+│   ├── canvas_quizzes.py       # Creates multiple-choice quizzes
 │
+├── pyproject.toml              # Packaging metadata (pip installable)
 ├── README.md                   # Documentation for setup and usage
 ├── .env.example                # Example for environment variables
 ├── requirements.txt            # Python dependencies
 ├── examples/                   # Example scripts
 │   ├── update_calendar_events.py  # Example for managing calendar events
-│   ├── ...                     # Other example scripts
+│   ├── create_quiz.py             # Example for creating a quiz
+│   ├── quiz.json                  # Example quiz definition (dummy data)
+│   ├── ...                        # Other example scripts
 ```
 
 ## Design
@@ -26,8 +33,11 @@ The package is designed to be modular:
 
 - `hi_canvas_api/`: Contains the primary modules for interacting with the Canvas API.
   - `canvas_calendar.py`: Manages calendar events.
-  - `canvas_rubrics.py`: (Future) Placeholder for rubric management functionality.
+  - `canvas_assignment.py`: Manages assignments.
+  - `canvas_rubric.py`: Manages rubrics.
+  - `canvas_quizzes.py`: Creates multiple-choice quizzes and their questions.
   - `__init__.py`: Centralizes imports for easier access.
+- `pyproject.toml`: Packaging metadata so the package can be installed with `pip`.
 - `README.md`: Documentation for setting up and using the package.
 - `.env.example`: Template for setting up environment variables.
 - `requirements.txt`: Lists Python dependencies.
@@ -51,6 +61,40 @@ The package is designed to be modular:
    ```bash
    pip install -r requirements.txt
    ```
+
+### Install as a package
+
+The project is packaged (see `pyproject.toml`), so it can be installed with `pip`
+and imported from other projects — no need to add it as a git submodule.
+
+Install directly from GitHub:
+
+```bash
+pip install "git+ssh://git@github.com/HI-IDN/canvas.git"
+```
+
+Or pin a specific branch/tag:
+
+```bash
+pip install "git+ssh://git@github.com/HI-IDN/canvas.git@main"
+```
+
+For local development, install in editable mode from the repository root:
+
+```bash
+pip install -e .
+```
+
+To use it as a dependency in another project (e.g. an admin repo), add it to that
+project's `requirements.txt` or `pyproject.toml`:
+
+```text
+# requirements.txt
+hi-canvas-api @ git+ssh://git@github.com/HI-IDN/canvas.git@main
+```
+
+The consuming project still needs its own `.env` (or the same environment
+variables) so the package can authenticate against Canvas.
 
 ---
 
@@ -133,11 +177,107 @@ create_calendar_event(
 )
 ```
 
+### Creating a multiple-choice quiz
+
+The `canvas_quizzes` module creates a Classic Quiz and adds multiple-choice
+questions from a simple quiz definition (a `dict` or a JSON file). Each question
+is single-answer with exactly one option marked `"correct": true`.
+
+```python
+from hi_canvas_api.canvas_quizzes import create_quiz_with_questions
+
+quiz = {
+    "title": "Sample Quiz",
+    "description": "<p>A short sample quiz.</p>",
+    "time_limit": 10,          # minutes (optional)
+    "shuffle_answers": True,
+    "published": False,        # create as draft, publish in Canvas when ready
+    "questions": [
+        {
+            "question_name": "Question 1",
+            "question_text": "<p>What is 2 + 2?</p>",
+            "points_possible": 1,
+            "answers": [
+                {"text": "4", "correct": True},
+                {"text": "3", "correct": False},
+                {"text": "5", "correct": False},
+            ],
+        }
+    ],
+}
+
+quiz_id = create_quiz_with_questions(quiz)
+```
+
+The definition can also be loaded from JSON — see `examples/quiz.json` for the
+full schema.
+
+### Creating an iRAT + tRAT pair
+
+A RAT ("Readiness Assurance Test") is taken first individually (iRAT) and then by
+the team (tRAT) using the same questions. `create_rat` builds both quizzes from a
+single definition:
+
+- the **iRAT** and **tRAT** get the same question groups and questions;
+- the **tRAT** gets an extra first question (0 points) that collects the name and
+  username of every team member — because Canvas has no real group quiz, one
+  member takes the tRAT for the team;
+- config controls team size, time limits and quiz settings.
+
+```python
+from hi_canvas_api.canvas_rat import create_rat
+
+rat = {
+    "title": "Sample Topic",
+    "config": {"irat_time_limit": 15, "trat_time_limit": 30, "max_team_size": 3},
+    "groups": [
+        {"name": "Category A", "questions": [ { "question_text": "...", "answers": [...] } ]},
+        {"name": "Category B", "questions": [ ... ]},
+    ],
+}
+
+ids = create_rat(rat)   # {"irat": <quiz_id>, "trat": <quiz_id>}
+```
+
+See `examples/rat.json` for the full schema and `DEFAULT_CONFIG` in
+`hi_canvas_api/canvas_rat.py` for all config keys.
+
+### Transferring tRAT grades to team members
+
+Since one member takes the tRAT for the team, `transfer_trat_grades` reads each
+tRAT submission, looks up the usernames entered in the first (team-names)
+question, and copies that submission's score onto each team member. It is a
+**dry-run by default** — pass `dry_run=False` to actually write grades.
+
+```python
+from hi_canvas_api.canvas_rat import transfer_trat_grades
+
+transfer_trat_grades(trat_quiz_id, dry_run=True)   # preview
+transfer_trat_grades(trat_quiz_id, dry_run=False)  # apply
+```
+
 ### Examples
 See the `examples/` directory for ready-to-run scripts. For instance, you can update calendar events using:
 
 ```bash
 python examples/update_calendar_events.py
+```
+
+Create a quiz from a JSON definition (validates before uploading):
+
+```bash
+python examples/create_quiz.py --file quiz.json
+```
+
+Other options: `--validate-only` checks the JSON without sending it to Canvas,
+`--list` lists existing quizzes, and `--delete <id>` removes a quiz.
+
+Create an iRAT + tRAT pair from a question file, or transfer tRAT grades:
+
+```bash
+python examples/create_rat.py --file rat.json
+python examples/create_rat.py --transfer-grades <TRAT_QUIZ_ID>          # preview
+python examples/create_rat.py --transfer-grades <TRAT_QUIZ_ID> --apply  # write grades
 ```
 
 ---
