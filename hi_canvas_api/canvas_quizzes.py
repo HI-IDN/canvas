@@ -25,6 +25,14 @@ if not all([INSTITUTION_URL, API_TOKEN, COURSE_ID]):
 # Base URL for the Classic Quizzes API
 QUIZZES_URL = f"{INSTITUTION_URL}/api/{API_VERSION}/courses/{COURSE_ID}/quizzes"
 
+# Optional Canvas quiz fields passed straight through to the API when present.
+OPTIONAL_QUIZ_FIELDS = [
+    "time_limit", "allowed_attempts", "scoring_policy",
+    "hide_results", "show_correct_answers", "show_correct_answers_at",
+    "hide_correct_answers_at", "one_question_at_a_time", "cant_go_back",
+    "unlock_at", "lock_at", "due_at",
+]
+
 
 def get_headers() -> dict:
     """Returns the headers for API requests."""
@@ -94,8 +102,12 @@ def create_quiz(quiz_data: dict) -> Optional[int]:
     Args:
         quiz_data (dict): Quiz metadata. Recognised keys: ``title`` (required),
             ``description``, ``quiz_type`` (default ``assignment``),
-            ``time_limit`` (minutes), ``shuffle_answers`` (bool, default True),
-            ``allowed_attempts`` (int, -1 = unlimited), ``published`` (bool).
+            ``shuffle_answers`` (bool, default True), ``published`` (bool) and any
+            of the optional Canvas quiz fields in ``OPTIONAL_QUIZ_FIELDS``
+            (``time_limit``, ``allowed_attempts``, ``hide_results``,
+            ``show_correct_answers``, ``show_correct_answers_at``,
+            ``one_question_at_a_time``, ``cant_go_back``, ``unlock_at``,
+            ``lock_at``, ``due_at`` …).
 
     Returns:
         int | None: The new quiz ID, or None if creation failed.
@@ -107,10 +119,9 @@ def create_quiz(quiz_data: dict) -> Optional[int]:
         "shuffle_answers": quiz_data.get("shuffle_answers", True),
         "published": quiz_data.get("published", False),
     }
-    if "time_limit" in quiz_data and quiz_data["time_limit"] is not None:
-        quiz_payload["time_limit"] = quiz_data["time_limit"]
-    if "allowed_attempts" in quiz_data:
-        quiz_payload["allowed_attempts"] = quiz_data["allowed_attempts"]
+    for field in OPTIONAL_QUIZ_FIELDS:
+        if quiz_data.get(field) is not None:
+            quiz_payload[field] = quiz_data[field]
 
     response = requests.post(QUIZZES_URL, headers=get_headers(), json={"quiz": quiz_payload})
 
@@ -181,6 +192,42 @@ def add_quiz_question(
 
     raise Exception(
         f"Failed to add question '{question.get('question_name', '')}': "
+        f"{response.status_code} - {response.text}"
+    )
+
+
+def create_quiz_group(
+    quiz_id: int, name: str, pick_count: int = 1, question_points: float = 1
+) -> Optional[int]:
+    """
+    Create a question group inside a quiz.
+
+    Question groups draw ``pick_count`` questions at random from the questions
+    assigned to the group. Set ``pick_count`` equal to the number of questions in
+    the group if every student should answer them all.
+
+    Args:
+        quiz_id (int): The quiz to add the group to.
+        name (str): Group name (e.g. a topic/category).
+        pick_count (int): How many questions to draw from the group.
+        question_points (float): Points per drawn question.
+
+    Returns:
+        int | None: The new group ID, or None on failure.
+    """
+    url = f"{QUIZZES_URL}/{quiz_id}/groups"
+    payload = {"quiz_groups": [
+        {"name": name, "pick_count": pick_count, "question_points": question_points}
+    ]}
+    response = requests.post(url, headers=get_headers(), json=payload)
+
+    if response.status_code in (200, 201):
+        group_id = response.json()["quiz_groups"][0]["id"]
+        logging.info(f"Created quiz group '{name}' (ID: {group_id}) in quiz {quiz_id}.")
+        return group_id
+
+    raise Exception(
+        f"Failed to create quiz group '{name}': "
         f"{response.status_code} - {response.text}"
     )
 

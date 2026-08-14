@@ -212,6 +212,50 @@ quiz_id = create_quiz_with_questions(quiz)
 The definition can also be loaded from JSON — see `examples/quiz.json` for the
 full schema.
 
+### Creating an iRAT + tRAT pair
+
+A RAT ("Readiness Assurance Test") is taken first individually (iRAT) and then by
+the team (tRAT) using the same questions. `create_rat` builds both quizzes from a
+single definition:
+
+- the **iRAT** and **tRAT** get the same question groups and questions;
+- the **tRAT** gets an extra first question (0 points) that collects the name and
+  username of every team member — because Canvas has no real group quiz, one
+  member takes the tRAT for the team;
+- config controls team size, time limits and quiz settings.
+
+```python
+from hi_canvas_api.canvas_rat import create_rat
+
+rat = {
+    "title": "Sample Topic",
+    "config": {"irat_time_limit": 15, "trat_time_limit": 30, "max_team_size": 3},
+    "groups": [
+        {"name": "Category A", "questions": [ { "question_text": "...", "answers": [...] } ]},
+        {"name": "Category B", "questions": [ ... ]},
+    ],
+}
+
+ids = create_rat(rat)   # {"irat": <quiz_id>, "trat": <quiz_id>}
+```
+
+See `examples/rat.json` for the full schema and `DEFAULT_CONFIG` in
+`hi_canvas_api/canvas_rat.py` for all config keys.
+
+### Transferring tRAT grades to team members
+
+Since one member takes the tRAT for the team, `transfer_trat_grades` reads each
+tRAT submission, looks up the usernames entered in the first (team-names)
+question, and copies that submission's score onto each team member. It is a
+**dry-run by default** — pass `dry_run=False` to actually write grades.
+
+```python
+from hi_canvas_api.canvas_rat import transfer_trat_grades
+
+transfer_trat_grades(trat_quiz_id, dry_run=True)   # preview
+transfer_trat_grades(trat_quiz_id, dry_run=False)  # apply
+```
+
 ### Examples
 See the `examples/` directory for ready-to-run scripts. For instance, you can update calendar events using:
 
@@ -227,6 +271,14 @@ python examples/create_quiz.py --file quiz.json
 
 Other options: `--validate-only` checks the JSON without sending it to Canvas,
 `--list` lists existing quizzes, and `--delete <id>` removes a quiz.
+
+Create an iRAT + tRAT pair from a question file, or transfer tRAT grades:
+
+```bash
+python examples/create_rat.py --file rat.json
+python examples/create_rat.py --transfer-grades <TRAT_QUIZ_ID>          # preview
+python examples/create_rat.py --transfer-grades <TRAT_QUIZ_ID> --apply  # write grades
+```
 
 ---
 

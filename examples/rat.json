@@ -1,0 +1,59 @@
+{
+  "title": "Sample Topic",
+  "config": {
+    "irat_time_limit": 15,
+    "trat_time_limit": 30,
+    "max_team_size": 3,
+    "shuffle_answers": true,
+    "hide_results": "always",
+    "published": false
+  },
+  "groups": [
+    {
+      "name": "Category A",
+      "questions": [
+        {
+          "question_name": "A1",
+          "question_text": "<p>What is 2 + 2?</p>",
+          "answers": [
+            {"text": "4", "correct": true},
+            {"text": "3", "correct": false},
+            {"text": "5", "correct": false}
+          ]
+        },
+        {
+          "question_name": "A2",
+          "question_text": "<p>What is 3 x 3?</p>",
+          "answers": [
+            {"text": "9", "correct": true},
+            {"text": "6", "correct": false},
+            {"text": "12", "correct": false}
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Category B",
+      "questions": [
+        {
+          "question_name": "B1",
+          "question_text": "<p>Which planet is the Red Planet?</p>",
+          "answers": [
+            {"text": "Mars", "correct": true},
+            {"text": "Venus", "correct": false},
+            {"text": "Jupiter", "correct": false}
+          ]
+        },
+        {
+          "question_name": "B2",
+          "question_text": "<p>What color is the sky on a clear day?</p>",
+          "answers": [
+            {"text": "Blue", "correct": true},
+            {"text": "Green", "correct": false},
+            {"text": "Red", "correct": false}
+          ]
+        }
+      ]
+    }
+  ]
+}

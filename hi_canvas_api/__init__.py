@@ -7,11 +7,13 @@ from .canvas_quizzes import (
     validate_quiz,
     create_quiz,
     add_quiz_question,
+    create_quiz_group,
     create_quiz_with_questions,
     list_quizzes,
     set_quiz_published,
     delete_quiz,
 )
+from .canvas_rat import create_rat, transfer_trat_grades
 
 # Future imports for rubrics or other modules can be added here:
 # from .canvas_rubrics import some_rubrics_function
