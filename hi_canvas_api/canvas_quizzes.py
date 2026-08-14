@@ -144,13 +144,16 @@ def add_quiz_question(
     Returns:
         int | None: The new question ID, or None on failure.
     """
-    answers_payload = [
-        {
-            "answer_text": answer["text"],
-            "answer_weight": 100 if answer.get("correct") else 0,
-        }
-        for answer in question["answers"]
-    ]
+    answers_payload = []
+    for answer in question["answers"]:
+        entry = {"answer_weight": 100 if answer.get("correct") else 0}
+        # Answer options are plain text by default; use answer_html so inline
+        # markup (e.g. <code>) renders instead of showing as literal tags.
+        if "<" in answer["text"]:
+            entry["answer_html"] = answer["text"]
+        else:
+            entry["answer_text"] = answer["text"]
+        answers_payload.append(entry)
 
     question_body = {
         "question_name": question.get("question_name", ""),
